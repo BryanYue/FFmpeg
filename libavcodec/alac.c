@@ -121,7 +121,7 @@ static int rice_decompress(ALACContext *alac, int32_t *output_buffer,
         unsigned int x;
 
         if(get_bits_left(&alac->gb) <= 0)
-            return -1;
+            return AVERROR_INVALIDDATA;
 
         /* calculate rice param and decode next value */
         k = av_log2((history >> 9) + 3);
@@ -317,7 +317,7 @@ static int decode_element(AVCodecContext *avctx, AVFrame *frame, int ch_index,
         if (alac->extra_bits) {
             for (i = 0; i < alac->nb_samples; i++) {
                 if(get_bits_left(&alac->gb) <= 0)
-                    return -1;
+                    return AVERROR_INVALIDDATA;
                 for (ch = 0; ch < channels; ch++)
                     alac->extra_bits_buffer[ch][i] = get_bits(&alac->gb, alac->extra_bits);
             }
@@ -353,7 +353,7 @@ static int decode_element(AVCodecContext *avctx, AVFrame *frame, int ch_index,
         /* not compressed, easy case */
         for (i = 0; i < alac->nb_samples; i++) {
             if(get_bits_left(&alac->gb) <= 0)
-                return -1;
+                return AVERROR_INVALIDDATA;
             for (ch = 0; ch < channels; ch++) {
                 alac->output_samples_buffer[ch][i] =
                          get_sbits_long(&alac->gb, alac->sample_size);
@@ -524,7 +524,7 @@ static int alac_set_info(ALACContext *alac)
 
     alac->max_samples_per_frame = bytestream2_get_be32u(&gb);
     if (!alac->max_samples_per_frame ||
-        alac->max_samples_per_frame > INT_MAX / sizeof(int32_t)) {
+        alac->max_samples_per_frame > 4096 * 4096) {
         av_log(alac->avctx, AV_LOG_ERROR,
                "max samples per frame invalid: %"PRIu32"\n",
                alac->max_samples_per_frame);
@@ -555,9 +555,9 @@ static av_cold int alac_decode_init(AVCodecContext * avctx)
         av_log(avctx, AV_LOG_ERROR, "extradata is too small\n");
         return AVERROR_INVALIDDATA;
     }
-    if (alac_set_info(alac)) {
+    if ((ret = alac_set_info(alac)) < 0) {
         av_log(avctx, AV_LOG_ERROR, "set_info failed\n");
-        return -1;
+        return ret;
     }
 
     switch (alac->sample_size) {
